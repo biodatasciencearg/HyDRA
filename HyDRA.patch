@@ -1,35 +1,35 @@
 *******> HyDRA.patch
 
- Author: Lopez Elias 
+ Author: Lopez Elias
 
- Date: June 8, 2018
+ Date: Jun. 26, 2018
 
- Programs: sander, sander LIO 
+ Programs: sander, sander LIO
 
  Description:  A) Add the HyDRA  module to sander
-	       B) BugFix related with work computation.
+               B) BugFix related with work computation.
 
 Ramírez, C. L., Zeida, A., Jara, G. E., Roitberg, A. E., & Martí, M. A. (2014). Improving efficiency in SMD simulations through a hybrid differential relaxation algorithm. Journal of chemical theory and computation, 10(10), 4609-4617.
 --------------------------------------------------------------------------------
-AmberTools/src/sander/drar.h                        |    5 +
-AmberTools/src/sander/mdread2.F90                   |    1 +
-AmberTools/src/sander/nmr.F90                       |   23 +-
-AmberTools/src/sander/nmrcal.F90                    |   32 +-
-AmberTools/src/sander/qm2_extern_lio_module.F90     |   37 +-
-AmberTools/src/sander/qm2_extern_module.F90         |    4 +-
-AmberTools/src/sander/qm_mm.F90                     |    6 +-
-AmberTools/src/sander/runmd.F90                     |   36 +
-AmberTools/src/sqm/qm2_read_nm_and_alloc.F90        |   16 +-
-AmberTools/src/sqm/qmmm_module.F90                  |    5 +-
-AmberTools/src/sqm/qmmm_nml_module.F90              |    6 +
-AmberTools/src/sqm/qmmm_struct_module.F90           |    2 +
-test/Makefile                                       |    1 +
-test/chorismate_HyDRA_DFTB/Run.chorismate_HyDRA_jar |   81 +
-test/chorismate_HyDRA_jar.out.save                  |  900 ++
-test/chorismate_HyDRA_DFTB/chorismate_HyDRA_jar.rst | 4825 ++++++++++
-test/test/qmmm_DFTB/chorismate_HyDRA_DFTB/prmtop    | 9715 ++++++++++++++++++++
- 17 files changed, 15642 insertions(+), 53 deletions(-)
 
+ $AMBERHOME/AmberTools/src/sander/drar.h                        |    5 +
+ $AMBERHOME/AmberTools/src/sander/mdread2.F90                   |   14 +
+ $AMBERHOME/AmberTools/src/sander/nmr.F90                       |   23 +-
+ $AMBERHOME/AmberTools/src/sander/nmrcal.F90                    |   32 +-
+ $AMBERHOME/src/sander/qm2_extern_lio_module.F90                |   51 +-
+ $AMBERHOME/AmberTools/src/sander/qm2_extern_module.F90         |    4 +-
+ $AMBERHOME/AmberTools/src/sander/qm_mm.F90                     |    6 +-
+ $AMBERHOME/AmberTools/src/sander/runmd.F90                     |   36 +
+ $AMBERHOME/AmberTools/src/sqm/qm2_read_nm_and_alloc.F90        |   16 +-
+ $AMBERHOME/AmberTools/src/sqm/qmmm_module.F90                  |    5 +-
+ $AMBERHOME/AmberTools/src/sqm/qmmm_nml_module.F90              |    6 +
+ $AMBERHOME/AmberTools/src/sqm/qmmm_struct_module.F90           |    2 +
+ $AMBERHOME/test/Makefile                                       |    1 +
+ $AMBERHOME/test/chorismate_HyDRA_DFTB/Run.chorismate_HyDRA_jar |   81 +
+ $AMBERHOME/test/chorismate_HyDRA_jar.out.save                  |  900 ++
+ $AMBERHOME/test/chorismate_HyDRA_DFTB/chorismate_HyDRA_jar.rst | 4825 ++++++++++
+ $AMBERHOME/test/qmmm_DFTB/chorismate_HyDRA_DFTB/prmtop         | 9715 ++++++++++++++++++++
+ 17 files changed, 15666 insertions(+), 56 deletions(-)
 diff --git AmberTools/src/sander/drar.h AmberTools/src/sander/drar.h
 new file mode 100644
 index 0000000..d4a0fd2
@@ -42,7 +42,7 @@ index 0000000..d4a0fd2
 +
 +common/hydra/ hydra_do_qm_step
 diff --git AmberTools/src/sander/mdread2.F90 AmberTools/src/sander/mdread2.F90
-index 97df3f5..29518b8 100644
+index 97df3f5..52c44b9 100644
 --- AmberTools/src/sander/mdread2.F90
 +++ AmberTools/src/sander/mdread2.F90
 @@ -699,6 +699,7 @@
@@ -53,6 +53,26 @@ index 97df3f5..29518b8 100644
        write(6, '(5x,"lnk_atomic_no = ",i8,"   lnk_dis = ",f8.4," lnk_method = ",i8)') &
                   qmmm_nml%lnk_atomic_no,qmmm_nml%lnk_dis, qmmm_nml%lnk_method
        if ( qmmm_nml%qmtheory%PM3 ) then
+@@ -814,6 +815,19 @@
+       if (qmmm_nml%printdipole==2) then
+          write(6, '("|",2x,"INFO: To compute MM dipole WAT residues will be stripped")')
+       end if
++      !HyDRA INFO
++      if (qmmm_nml%drar > 1) then
++          write (6, '("QMMM: HyDRA OPTIONS")')
++          write (6, '("You selected a drar step  of: ", i8)') qmmm_nml%drar
++          write (6, '(/a//a/a/a/a/a)') &
++          '| Please also cite the following work:', &
++          '| Ramírez, C. L., Zeida, A., Jara, G. E., Roitberg, A.', &
++          '| E.,  Martí, M. A. (2014)', &
++          '| "Improving efficiency in SMD simulations through a', &
++          '| hybrid differential relaxation algorithm. Journal of chemical theory and"' , &
++          '| computation, 10(10), 4609-4617.', &
++          '|------------------------------------------------------------'
++      end if !HyDRA
+    end if
+ 
+    if (qmmm_nml%vsolv > 0) then
 diff --git AmberTools/src/sander/nmr.F90 AmberTools/src/sander/nmr.F90
 index 76721a8..98e9163 100644
 --- AmberTools/src/sander/nmr.F90
@@ -187,7 +207,7 @@ index eacfccf..eaf9316 100644
        ! First check/reset short-range distance interactions flags
        call nmrsht(x,nmrnum,rimass,nstep,iwork(jnmrat), &
 diff --git AmberTools/src/sander/qm2_extern_lio_module.F90 AmberTools/src/sander/qm2_extern_lio_module.F90
-index c52e1a6..176fabe 100644
+index c52e1a6..33a11ef 100644
 --- AmberTools/src/sander/qm2_extern_lio_module.F90
 +++ AmberTools/src/sander/qm2_extern_lio_module.F90
 @@ -75,7 +75,7 @@ contains
@@ -209,7 +229,7 @@ index c52e1a6..176fabe 100644
      ! Setup on first call
      if ( first_call ) then
         first_call = .false.
-@@ -125,33 +128,17 @@ contains
+@@ -125,33 +128,25 @@ contains
  !         enddo
  !!           endif
  
@@ -220,17 +240,11 @@ index c52e1a6..176fabe 100644
 -!      if (do_grad) then
 -         dxyzqm=0
 -         dxyzcl=0
-+      if (hydra_do_qm_step) then
-+            call SCF_in(escf,qmcoords,clcoords,nclatoms,dipxyz)
- 
-+            escf=escf*CODATA08_AU_TO_KCAL
-+      end if
-+      dxyzqm=0
-+      dxyzcl=0
-       call dft_get_qm_forces(dxyzqm)
+-
+-      call dft_get_qm_forces(dxyzqm)
 -!      open(unit=44,file='dxyzqm')
 -!      write(44,*) dxyzqm  
-       call dft_get_mm_forces(dxyzcl,dxyzqm)
+-      call dft_get_mm_forces(dxyzcl,dxyzqm)
 -
 -       dxyzqm=dxyzqm*CODATA08_AU_TO_KCAL * CODATA08_A_TO_BOHRS
 -
@@ -246,8 +260,25 @@ index c52e1a6..176fabe 100644
 -
 -
 -!    escf = escf * CODATA08_AU_TO_KCAL
-+      dxyzqm=dxyzqm*CODATA08_AU_TO_KCAL * CODATA08_A_TO_BOHRS
-+      dxyzcl=dxyzcl*CODATA08_AU_TO_KCAL * CODATA08_A_TO_BOHRS
++      if (hydra_do_qm_step) then
++            dxyzqm=0 ! cuanticos
++            dxyzcl=0 !clasicos
++
++            call SCF_in(escf,qmcoords,clcoords,nclatoms,dipxyz)
++
++            escf=escf*CODATA08_AU_TO_KCAL
++
++            call dft_get_qm_forces(dxyzqm)
++            call dft_get_mm_forces(dxyzcl,dxyzqm)
++            dxyzqm=dxyzqm*CODATA08_AU_TO_KCAL * CODATA08_A_TO_BOHRS
++            dxyzcl=dxyzcl*CODATA08_AU_TO_KCAL * CODATA08_A_TO_BOHRS
++      else
++            !gradientes en atomos clasicos 
++            dxyzqm=0 ! cuanticos
++            dxyzcl=0 !clasicos
++            call dft_get_mm_forces(dxyzcl,dxyzqm)
++            dxyzcl=dxyzcl*CODATA08_AU_TO_KCAL * CODATA08_A_TO_BOHRS
++      end if
  
    end subroutine get_lio_forces
  
@@ -302,7 +333,7 @@ index 9a201df..df01945 100644
    ! If we are doing qm_ewald then we need to calculate the gradients due to
    ! the ewald potential here.  This is only available analytically: no
 diff --git AmberTools/src/sander/runmd.F90 AmberTools/src/sander/runmd.F90
-index 2e7a4c8..cf52c25 100644
+index 2e7a4c8..c18e769 100644
 --- AmberTools/src/sander/runmd.F90
 +++ AmberTools/src/sander/runmd.F90
 @@ -1377,6 +1377,15 @@ subroutine runmd(xx, ix, ih, ipairs, x, winv, amass, f, v, vold, xr, xc, &
@@ -311,12 +342,12 @@ index 2e7a4c8..cf52c25 100644
    end if
 +
 +   ! HyDRA
-+   if (mod(nstep,qmmm_nml%drar) == 0) then
++   if (mod(nstep,qmmm_nml%drar) == 0 .and. qmmm_nml%drar > 1) then
 +      qmmm_struct%hydra_do_qm_step = .true.
-+      write(6,*) 'drar, do_qm_step', qmmm_nml%drar , qmmm_struct%hydra_do_qm_step
-+   else
++      write(6,*) 'HYDRA, do_qm_step', qmmm_nml%drar , qmmm_struct%hydra_do_qm_step
++   else if (qmmm_nml%drar > 1) then
 +      qmmm_struct%hydra_do_qm_step = .false.
-+      write(6,*) 'drar, do_qm_step', qmmm_nml%drar, qmmm_struct%hydra_do_qm_step
++      write(6,*) 'HYDRA, do_drar_step', qmmm_nml%drar, qmmm_struct%hydra_do_qm_step
 +   end if
    
    ! EVB reactive flux: driver for coordinating backward and
